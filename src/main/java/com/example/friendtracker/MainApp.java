@@ -34,8 +34,23 @@ public class MainApp extends Application {
         this.primaryStage = stage;
         stage.setTitle("Sosyal Medya Arkadaş Takibi");
 
+        // Veritabanı ve verileri başlat
         DatabaseManager.initializeDatabase();
-        users.addAll(service.getAllUsersFromDB()); // Service de Account döndürmeli
+        users.addAll(service.getAllUsersFromDB());
+
+        // --- İKON YÜKLEME BÖLÜMÜ ---
+        try {
+            // Resources altındaki icon.png dosyasını oku
+            var iconStream = getClass().getResourceAsStream("/icon.png");
+            if (iconStream != null) {
+                stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+            } else {
+                System.err.println("Uyarı: /src/main/resources/icon.png dosyası bulunamadı!");
+            }
+        } catch (Exception e) {
+            System.out.println("İkon yüklenirken bir hata oluştu: " + e.getMessage());
+        }
+        // ---------------------------
 
         showLoginScreen();
     }
