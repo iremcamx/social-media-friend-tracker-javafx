@@ -49,4 +49,5 @@ public abstract class Account { // Abstract tanımlandı
 
     @Override
     public int hashCode() { return Objects.hash(username.toLowerCase()); }
+
 }
