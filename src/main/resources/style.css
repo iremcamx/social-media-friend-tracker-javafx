@@ -1,0 +1,63 @@
+/* Ana Arkaplan */
+.root {
+    -fx-background-color: #f0f2f5;
+    -fx-font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+/* Listeler (ListView) */
+.list-view {
+    -fx-background-color: white;
+    -fx-background-radius: 10;
+    -fx-border-color: #ddd;
+    -fx-border-radius: 10;
+    -fx-padding: 5;
+}
+
+.list-cell {
+    -fx-padding: 10;
+    -fx-border-color: transparent transparent #f0f0f0 transparent;
+}
+
+.list-cell:filled:selected {
+    -fx-background-color: #e7f3ff;
+    -fx-text-fill: #1877f2;
+}
+
+/* Butonlar Genel */
+.button {
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+    -fx-font-weight: bold;
+    -fx-padding: 8 15;
+    -fx-transition: 0.3s;
+}
+
+/* Mavi Buton (Arama) */
+.smart-search-button {
+    -fx-background-color: #1877f2;
+    -fx-text-fill: white;
+}
+.smart-search-button:hover { -fx-background-color: #166fe5; }
+
+/* Turuncu Buton (Keşfet) */
+.discover-button {
+    -fx-background-color: #ff9800;
+    -fx-text-fill: white;
+}
+
+/* Tehlikeli Butonlar (Sil/Çık) */
+.danger-button {
+    -fx-background-color: #ffebee;
+    -fx-text-fill: #d32f2f;
+    -fx-border-color: #ffcdd2;
+    -fx-border-radius: 8;
+}
+.danger-button:hover { -fx-background-color: #ffcdd2; }
+
+/* Log Alanı */
+.text-area {
+    -fx-control-inner-background: #2b2b2b;
+    -fx-text-fill: #a9b7c6;
+    -fx-font-family: "Consolas", monospace;
+    -fx-background-radius: 10;
+}

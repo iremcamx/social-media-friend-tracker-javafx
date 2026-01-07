@@ -1,6 +1,6 @@
 package com.example.friendtracker;
 
-import com.example.friendtracker.model.Account;
+import com.example.friendtracker.model.Account; // Account import edildi
 import com.example.friendtracker.model.Influencer;
 import com.example.friendtracker.model.User;
 import com.example.friendtracker.service.SocialMediaService;
@@ -14,268 +14,139 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import java.util.Optional;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.List;
-import java.util.stream.Collectors;
-import javafx.scene.image.Image;
-import java.util.Arrays;
-
 
 public class MainApp extends Application {
 
     private Stage primaryStage;
     private SocialMediaService service = new SocialMediaService();
 
+    // User yerine Account kullanıyoruz (Polymorphism)
     private final ObservableList<Account> users = FXCollections.observableArrayList();
     private final ListView<Account> userListView = new ListView<>(users);
     private final ListView<Account> friendsListView = new ListView<>();
     private final ListView<Account> followingListView = new ListView<>();
     private final TextArea logArea = new TextArea();
 
-    private Button logoutBtn, addFriendBtn, removeFriendBtn, followBtn, unfollowBtn, deleteUserBtn, searchBtn;
+    private Button loginBtn, logoutBtn, addUserBtn, addFriendBtn, removeFriendBtn, followBtn, unfollowBtn, deleteUserBtn;
 
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
+        stage.setTitle("Sosyal Medya Arkadaş Takibi");
 
+        DatabaseManager.initializeDatabase();
+        users.addAll(service.getAllUsersFromDB());
+
+        // --- İKON YÜKLEME ---
         try {
-            // "Image" kırmızılığı yukarıdaki import ile düzelecektir.
-            // Dosya yolunun başına '/' koymayı unutma.
-            stage.getIcons().add(new Image(getClass().getResourceAsStream("/icon.png")));
+            var iconStream = getClass().getResourceAsStream("/icon.png");
+            if (iconStream != null) {
+                stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+            }
         } catch (Exception e) {
-            System.out.println("İkon yüklenemedi, varsayılan ikon kullanılacak.");
+            System.out.println("İkon hatası: " + e.getMessage());
         }
 
+        // İlk ekranı yükle
         showLoginScreen();
+
+        // --- CSS EKLEME BÖLÜMÜ ---
+        // showLoginScreen içinde stage.setScene yapıldığı için burada scene'e ulaşabiliriz
+        if (stage.getScene() != null) {
+            applyStyle(stage.getScene());
+        }
+
         stage.show();
+    }
+
+    // Tekrardan kaçınmak için bu yardımcı metodu MainApp içine ekle
+    private void applyStyle(Scene scene) {
+        try {
+            String css = getClass().getResource("/style.css").toExternalForm();
+            scene.getStylesheets().clear(); // Varsa eskiyi temizle
+            scene.getStylesheets().add(css);
+        } catch (Exception e) {
+            System.err.println("CSS dosyası yüklenemedi! style.css dosyasının resources klasöründe olduğundan emin olun.");
+        }
     }
 
     private void showLoginScreen() {
         VBox layout = new VBox(15);
         layout.setAlignment(Pos.CENTER);
         layout.setPadding(new Insets(50));
+
         Label title = new Label("Sistem Girişi");
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
         TextField userField = new TextField();
         userField.setPromptText("Kullanıcı Adı");
         PasswordField passField = new PasswordField();
         passField.setPromptText("Şifre");
+
         Button loginSubmitBtn = new Button("Giriş Yap");
         loginSubmitBtn.setStyle("-fx-background-color: #1da1f2; -fx-text-fill: white;");
+
         Button registerBtn = new Button("Yeni Kayıt Oluştur");
 
         loginSubmitBtn.setOnAction(e -> {
-            String username = userField.getText();
-            String password = passField.getText();
+            String user = userField.getText(); // Arayüzden kullanıcı adını al
+            String pass = passField.getText(); // Arayüzden şifreyi al
 
-            // HATA BURADAYDI: service.login(found) yerine doğrudan kullanıcı adı ve şifre gönderiyoruz
-            if (service.login(username, password)) {
+            // Hata veren satır burasıydı. Şimdi 2 argüman (user ve pass) gönderiyoruz:
+            if (service.login(user, pass)) {
                 showMainDashboard();
-                log("Sistem: " + username + " başarıyla oturum açtı.");
+                log("Sistem: Giriş başarılı!");
             } else {
                 alert("Hatalı kullanıcı adı veya şifre!");
             }
         });
+
         registerBtn.setOnAction(e -> onAddUser());
+
         layout.getChildren().addAll(title, userField, passField, loginSubmitBtn, registerBtn);
         primaryStage.setScene(new Scene(layout, 400, 350));
         primaryStage.show();
     }
 
     private void showMainDashboard() {
-        // Sol taraftaki profil listesine tıklandığında detayları yenile
         userListView.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> refreshDetails(newV));
-
         logArea.setEditable(false);
-        logArea.setPrefHeight(120);
-        userListView.getItems().clear();
-        userListView.getItems().add(service.getCurrentUser());
 
-        // --- MODERN AKILLI BUTONLAR ---
-        // Bu buton onSmartSearch metodunu çağırdığı için o metodun üzerindeki grilik gidecektir.
-        Button smartSearchBtn = new Button("🔍 Kullanıcı Ara");
-        smartSearchBtn.setStyle("-fx-font-weight: bold; -fx-background-color: #2196f3; -fx-text-fill: white;");
-        smartSearchBtn.setOnAction(e -> onSmartSearch());
-
-        Button discoverBtn = new Button("✨ Keşfet");
-        discoverBtn.setStyle("-fx-background-color: #ff9800; -fx-text-fill: white; -fx-font-weight: bold;");
-        discoverBtn.setOnAction(e -> onDiscoverPeople());
-
-        // Diğer butonlar (Seçim yapılana kadar pasif/gri kalacaklar)
-        removeFriendBtn = new Button("👤 Arkadaşı Çıkar");
-        removeFriendBtn.setOnAction(e -> onRemoveFriend());
-        removeFriendBtn.setDisable(true);
-
-        unfollowBtn = new Button("❌ Takibi Bırak");
-        unfollowBtn.setOnAction(e -> onUnfollow());
-        unfollowBtn.setDisable(true);
-
-        deleteUserBtn = new Button("🗑️ Hesabı Sil");
-        deleteUserBtn.setOnAction(e -> onDeleteUser());
-
-        logoutBtn = new Button("🚪 Çıkış Yap");
+        logoutBtn = new Button("Çıkış Yap");
         logoutBtn.setOnAction(e -> {
             service.logout();
             showLoginScreen();
         });
 
-        // --- SEÇİM DİNLEYİCİLERİ (Butonları Canlandıran Kısım) ---
+        addFriendBtn = new Button("Arkadaş Ekle");
+        addFriendBtn.setOnAction(e -> onAddFriend());
 
-        // Takip Edilenler listesinde birine tıklandığında "Takipten Çık" butonunun griliği gider
-        followingListView.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
-            if (newV != null) {
-                // DİĞER LİSTEDEKİ SEÇİMİ TEMİZLE
-                friendsListView.getSelectionModel().clearSelection();
-                // Butonları ayarla
-                unfollowBtn.setDisable(false);
-                removeFriendBtn.setDisable(true);
-            } else {
-                unfollowBtn.setDisable(true);
-            }
-        });
-        friendsListView.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
-            if (newV != null) {
-                // DİĞER LİSTEDEKİ SEÇİMİ TEMİZLE
-                followingListView.getSelectionModel().clearSelection();
-                // Butonları ayarla
-                removeFriendBtn.setDisable(false);
-                unfollowBtn.setDisable(true);
-            } else {
-                removeFriendBtn.setDisable(true);
-            }
-        });
+        removeFriendBtn = new Button("Arkadaş Çıkar");
+        removeFriendBtn.setOnAction(e -> onRemoveFriend());
 
-        // --- ARAYÜZ YERLEŞİMİ ---
-        HBox actions = new HBox(12);
-        actions.setPadding(new Insets(15));
-        actions.setAlignment(Pos.CENTER);
-        // Eski gereksiz butonları (onFollow, onSearchAndAdd) buradan kaldırdık
-        actions.getChildren().addAll(smartSearchBtn, discoverBtn, removeFriendBtn, unfollowBtn, deleteUserBtn, logoutBtn);
+        followBtn = new Button("Takip Et");
+        followBtn.setOnAction(e -> onFollow());
 
-        VBox details = new VBox(10,
-                new Label("👥 Arkadaşlarım"), friendsListView,
-                new Label("🌟 Takip Ettiklerim"), followingListView
-        );
+        unfollowBtn = new Button("Takipten Çık");
+        unfollowBtn.setOnAction(e -> onUnfollow());
+
+        deleteUserBtn = new Button("Kullanıcıyı Sil");
+        deleteUserBtn.setOnAction(e -> onDeleteUser());
+
+        HBox actions = new HBox(10, addFriendBtn, removeFriendBtn, followBtn, unfollowBtn, deleteUserBtn, logoutBtn);
+        actions.setPadding(new Insets(10));
+
+        VBox details = new VBox(10, new Label("Arkadaşlar"), friendsListView, new Label("Takip Edilenler"), followingListView);
         details.setPadding(new Insets(10));
 
         BorderPane root = new BorderPane();
-        root.setLeft(new VBox(10, new Label("👤 Profilim"), userListView));
+        root.setLeft(new VBox(10, new Label("Tüm Kullanıcılar"), userListView));
         root.setCenter(details);
-        root.setBottom(new VBox(8, actions, new Label("📜 İşlem Geçmişi"), logArea));
+        root.setBottom(new VBox(8, actions, new Label("İşlem Logları"), logArea));
 
-        primaryStage.setScene(new Scene(root, 1100, 750));
-
-        // Sayfayı ilk açtığımızda kullanıcının güncel verilerini ekrana bas
+        primaryStage.setScene(new Scene(root, 1000, 700));
+        primaryStage.setTitle("Friend Tracker - " + service.getCurrentUser().getUsername());
         refreshDetails(service.getCurrentUser());
-        log("Sistem: Giriş yapıldı. " + service.getCurrentUser().getUsername() + " olarak oturum açtınız.");
-    }
-
-
-    private void handleFoundUser(Account target) {
-        Alert choice = new Alert(Alert.AlertType.CONFIRMATION);
-        choice.setTitle("Kullanıcı Bulundu");
-        choice.setHeaderText(target.getUsername() + " bulundu.");
-        choice.setContentText("Hangi işlemi yapmak istersiniz?");
-        ButtonType btnFriend = new ButtonType("Arkadaş Ekle");
-        ButtonType btnFollow = new ButtonType("Takip Et");
-        ButtonType btnCancel = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
-        choice.getButtonTypes().setAll(btnFriend, btnFollow, btnCancel);
-
-        choice.showAndWait().ifPresent(response -> {
-            if (response == btnFriend) {
-                if (target instanceof Influencer) alert("Hata: Influencerlar arkadaş eklenemez!");
-                else {
-                    service.addFriend(service.getCurrentUser(), target);
-                    log("İşlem: " + target.getUsername() + " arkadaş olarak eklendi."); // LOG
-                }
-            } else if (response == btnFollow) {
-                if (target instanceof User) alert("Hata: Normal kullanıcılar takip edilemez!");
-                else {
-                    service.follow(service.getCurrentUser(), target);
-                    log("İşlem: " + target.getUsername() + " takip edilmeye başlandı."); // LOG
-                }
-            }
-            refreshDetails(service.getCurrentUser());
-        });
-    }
-    private void onSmartSearch() {
-        Account current = service.getCurrentUser();
-        // 1. Kullanıcıyı seç
-        Account target = pickTargetUser("Kullanıcı Ara", "Etkileşime geçmek istediğiniz kişiyi seçin:", current);
-
-        if (target != null) {
-            // 2. İşlem tipini seçtir (Keşfet butonundaki mantık)
-            List<String> options = Arrays.asList("Arkadaş Ekle", "Takip Et");
-            ChoiceDialog<String> dialog = new ChoiceDialog<>("Arkadaş Ekle", options);
-            dialog.setTitle("İşlem Seçin");
-            dialog.setHeaderText(target.getUsername() + " için ne yapmak istersiniz?");
-            dialog.setContentText("İşlem:");
-
-            Optional<String> result = dialog.showAndWait();
-
-            if (result.isPresent()) {
-                String choice = result.get();
-
-                if (choice.equals("Arkadaş Ekle")) {
-                    // --- ARKADAŞLIK KONTROLLERİ ---
-                    if (target instanceof Influencer) {
-                        alert("Hata: Influencerlar arkadaş olarak eklenemez, sadece takip edilebilir!");
-                    } else if (current.getFriends().stream().anyMatch(f -> f.getUsername().equalsIgnoreCase(target.getUsername()))) {
-                        alert("Uyarı: " + target.getUsername() + " ile zaten arkadaşsınız!");
-                    } else {
-                        service.addFriend(current, target);
-                        log("İşlem: " + target.getUsername() + " arkadaş eklendi.");
-                        refreshDetails(current);
-                    }
-                } else if (choice.equals("Takip Et")) {
-                    // --- TAKİP KONTROLLERİ ---
-                    if (!(target instanceof Influencer)) {
-                        alert("Hata: Sadece Influencerlar takip edilebilir!");
-                    } else if (current.getFollowing().stream().anyMatch(a -> a.getUsername().equalsIgnoreCase(target.getUsername()))) {
-                        alert("Uyarı: " + target.getUsername() + " zaten takip listenizde!");
-                    } else {
-                        service.follow(current, target);
-                        log("İşlem: " + target.getUsername() + " takip edildi. (Yeni Takipçi: " + ((Influencer)target).getFollowerCount() + ")");
-                        refreshDetails(current);
-                    }
-                }
-            }
-        }
-    }
-
-    private void onDiscoverPeople() {
-        Account me = service.getCurrentUser();
-        if (me == null) return;
-        Map<Account, Integer> recommendations = new HashMap<>();
-
-        // 1. Ortak Arkadaş (2 Puan)
-        for (Account myFriend : me.getFriends()) {
-            for (Account pFriend : myFriend.getFriends()) {
-                if (!pFriend.equals(me) && !me.getFriends().contains(pFriend)) {
-                    recommendations.put(pFriend, recommendations.getOrDefault(pFriend, 0) + 2);
-                }
-            }
-        }
-        // 2. Influencer Önerisi (1 Puan)
-        for (Account acc : service.getAllUsersFromDB()) {
-            if (acc instanceof Influencer && !me.getFollowing().contains(acc)) {
-                recommendations.put(acc, recommendations.getOrDefault(acc, 0) + 1);
-            }
-        }
-
-        List<Account> sorted = recommendations.entrySet().stream()
-                .sorted((e1, e2) -> e2.getValue().compareTo(e1.getValue()))
-                .map(Map.Entry::getKey).collect(Collectors.toList());
-
-        if (sorted.isEmpty()) alert("Şu an öneri yok.");
-        else {
-            ChoiceDialog<Account> dialog = new ChoiceDialog<>(sorted.get(0), sorted);
-            dialog.setTitle("Keşfet");
-            dialog.setHeaderText("Önerilen Kişiler");
-            dialog.showAndWait().ifPresent(this::handleFoundUser);
-        }
     }
 
     private void onAddUser() {
@@ -283,6 +154,7 @@ public class MainApp extends Application {
         PasswordField passField = new PasswordField();
         ComboBox<String> typeBox = new ComboBox<>(FXCollections.observableArrayList("User", "Influencer"));
         typeBox.setValue("User");
+
         VBox layout = new VBox(10, new Label("Kullanıcı Adı:"), nameField, new Label("Şifre:"), passField, typeBox);
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -292,74 +164,64 @@ public class MainApp extends Application {
         dialog.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 String inputName = nameField.getText().trim();
-                if (service.getAllUsersFromDB().stream().anyMatch(u -> u.getUsername().equalsIgnoreCase(inputName))) {
+                String inputPass = passField.getText();
+
+                if (inputName.isEmpty() || inputPass.isEmpty()) {
+                    alert("Hata: Boş alan bırakılamaz!");
+                    return;
+                }
+
+                if (users.stream().anyMatch(u -> u.getUsername().equalsIgnoreCase(inputName))) {
                     alert("Hata: Bu kullanıcı adı zaten alınmış!");
                     return;
                 }
-                Account u = typeBox.getValue().equals("Influencer") ? new Influencer(inputName, passField.getText()) : new User(inputName, passField.getText());
+
+                // Polymorphism: Account referansı, User veya Influencer tutabilir
+                Account u = typeBox.getValue().equals("Influencer") ?
+                        new Influencer(inputName, inputPass) :
+                        new User(inputName, inputPass);
+
                 service.saveUserToDB(u);
                 users.add(u);
-                alert("Kayıt başarılı!");
+                log(inputName + " başarıyla kaydedildi.");
             }
         });
     }
 
     private void onDeleteUser() {
-        if (new Alert(Alert.AlertType.CONFIRMATION, "Hesabınızı silmek istiyor musunuz?").showAndWait().get() == ButtonType.OK) {
-            String name = service.getCurrentUser().getUsername();
-            service.deleteAccount(service.getCurrentUser());
-            users.remove(service.getCurrentUser());
-            service.logout();
-            showLoginScreen();
-            // Bu logu giriş ekranındaki log alanına yazar
-            System.out.println("Sistem: " + name + " hesabı silindi.");
+        Account selected = userListView.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            service.deleteUser(selected.getUsername());
+            users.remove(selected);
+            log("Silindi: " + selected.getUsername());
         }
     }
 
+    private void onAddFriend() {
+        Account target = pickTargetUser("Arkadaş Ekle", "Kimi eklemek istiyorsun?", service.getCurrentUser());
+        if (target != null) {
+            service.addFriend(service.getCurrentUser(), target);
+            refreshDetails(service.getCurrentUser());
+            log(target.getUsername() + " ile arkadaş olundu.");
+        }
+    }
 
     private void onRemoveFriend() {
         Account selected = friendsListView.getSelectionModel().getSelectedItem();
         if (selected != null) {
             service.removeFriend(service.getCurrentUser(), selected);
-            log("İşlem: " + selected.getUsername() + " arkadaştan çıkarıldı."); // LOG
-            refreshDetails(service.getCurrentUser());
+            friendsListView.getItems().remove(selected);
+            log(selected.getUsername() + " arkadaştan çıkarıldı.");
         }
     }
 
     private void onFollow() {
         Account target = pickTargetUser("Takip Et", "Kimi takip etmek istiyorsun?", service.getCurrentUser());
-
         if (target != null) {
-            Account me = service.getCurrentUser();
-
-            // 1. KONTROL: Zaten takip ediliyor mu? (Username üzerinden kontrol en sağlamıdır)
-            boolean isAlreadyFollowing = me.getFollowing().stream()
-                    .anyMatch(a -> a.getUsername().equals(target.getUsername()));
-
-            if (isAlreadyFollowing) {
-                alert("Hata: " + target.getUsername() + " zaten takip listenizde!");
-                return;
-            }
-
-            // 2. KONTROL: Zaten arkadaş mısınız?
-            boolean isAlreadyFriend = me.getFriends().stream()
-                    .anyMatch(f -> f.getUsername().equals(target.getUsername()));
-
-            if (isAlreadyFriend) {
-                alert("Hata: Arkadaş olduğunuz birini takip edemezsiniz!");
-                return;
-            }
-
-            // 3. İŞLEM: Sadece Influencerlar takip edilebilir
-            if (target instanceof Influencer) {
-                service.follow(me, target); // Servisi çağır
-
-                log("İşlem: " + target.getUsername() + " takip edildi. (Güncel Takipçi: " + ((Influencer) target).getFollowerCount() + ")");
-
-                refreshDetails(me);
-            } else {
-                alert("Hata: Sadece Influencerlar takip edilebilir!");
-            }
+            service.follow(service.getCurrentUser(), target);
+            refreshDetails(service.getCurrentUser());
+            userListView.refresh();
+            log(target.getUsername() + " takip edildi.");
         }
     }
 
@@ -367,60 +229,32 @@ public class MainApp extends Application {
         Account selected = followingListView.getSelectionModel().getSelectedItem();
         if (selected != null) {
             service.unfollow(service.getCurrentUser(), selected);
-
-            String logMesaji = "İşlem: " + selected.getUsername() + " takibi bırakıldı.";
-            if (selected instanceof Influencer) {
-                logMesaji += " (Güncel: " + ((Influencer) selected).getFollowerCount() + ")";
-            }
-            log(logMesaji);
-
-            // Listeyi anında güncelle
-            refreshDetails(service.getCurrentUser());
-        } else {
-            alert("Lütfen listeden birini seçin.");
+            followingListView.getItems().remove(selected);
+            userListView.refresh();
+            log(selected.getUsername() + " takipten çıkıldı.");
         }
     }
 
     private void refreshDetails(Account selected) {
         if (selected == null) return;
-
-        Account me = service.getCurrentUser();
-
-        // Listeleri doldur
         friendsListView.setItems(FXCollections.observableArrayList(selected.getFriends()));
         followingListView.setItems(FXCollections.observableArrayList(selected.getFollowing()));
-
-        // --- ÖNEMLİ: Seçilen kişi zaten takip ediliyorsa uyarıyı burada da yönetebiliriz ---
-        if (selected instanceof Influencer) {
-            boolean isAlreadyFollowing = me.getFollowing().stream()
-                    .anyMatch(a -> a.getUsername().equalsIgnoreCase(selected.getUsername()));
-
-            // Eğer zaten takip ediliyorsa log alanına bir not düşebiliriz
-            if(isAlreadyFollowing) {
-                log("Sistem Notu: Bu Influencer zaten takibinizde.");
-            }
-        }
-
-        // Arayüzü tazele
-        userListView.refresh();
-        followingListView.refresh();
-        friendsListView.refresh();
     }
 
     private Account pickTargetUser(String title, String header, Account exclude) {
         ChoiceDialog<Account> dialog = new ChoiceDialog<>();
         dialog.setTitle(title);
         dialog.setHeaderText(header);
-
-        // HATA DÜZELTİLDİ: service.getAllUsers() yerine service.getAllUsersFromDB() kullanıldı
-        service.getAllUsersFromDB().stream()
-                .filter(u -> !u.getUsername().equals(exclude.getUsername()))
-                .forEach(u -> dialog.getItems().add(u));
-
+        for (Account u : users) { if (!u.equals(exclude)) dialog.getItems().add(u); }
         return dialog.showAndWait().orElse(null);
     }
 
     private void log(String msg) { logArea.appendText(msg + "\n"); }
-    private void alert(String msg) { new Alert(Alert.AlertType.INFORMATION, msg).showAndWait(); }
+
+    private void alert(String msg) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, msg);
+        a.showAndWait();
+    }
+
     public static void main(String[] args) { launch(args); }
 }
